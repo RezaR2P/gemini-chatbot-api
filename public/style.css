@@ -867,6 +867,34 @@ input[type="text"]::placeholder {
 /* Credits */
 .credits { color: rgba(255, 255, 255, 0.55); }
 
+/* Toast notifications */
+.toast-container {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.toast {
+  background: rgba(220, 38, 38, 0.95);
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 8px;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.25);
+  transform: translateY(-8px);
+  opacity: 0;
+  transition: all 0.25s ease;
+  font-size: 0.95rem;
+}
+.toast.show {
+  transform: translateY(0);
+  opacity: 1;
+}
+.toast.success { background: rgba(5, 150, 105, 0.95); }
+.toast.info { background: rgba(37, 99, 235, 0.95); }
+
 /* Scrollbars (Webkit) */
 .chat-box::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.06); }
 .chat-box::-webkit-scrollbar-thumb { background: linear-gradient(135deg, #4f46e5, #7c3aed); }

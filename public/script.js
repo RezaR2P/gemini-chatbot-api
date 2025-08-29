@@ -21,6 +21,41 @@ document.addEventListener('DOMContentLoaded', function () {
   let chatMessages = [];
   let allSessions = [];
   let messageSeq = 0; // ensure unique message IDs to avoid DOM overwrites
+  // Toast notifications
+  let toastTimer;
+  function ensureToastContainer() {
+    let container = document.querySelector('.toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.className = 'toast-container';
+      document.body.appendChild(container);
+    }
+    return container;
+  }
+  function showToast(message, type = 'error', duration = 3000) {
+    const container = ensureToastContainer();
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    // animate in
+    requestAnimationFrame(() => toast.classList.add('show'));
+    // auto dismiss (single timer keeps last toast visible long enough)
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 250);
+    }, duration);
+  }
+
+  // Debounce helper
+  function debounce(fn, wait = 400) {
+    let t;
+    return (...args) => {
+      clearTimeout(t);
+      t = setTimeout(() => fn.apply(null, args), wait);
+    };
+  }
 
   // Generate a unique ID with an optional prefix
   function uniqueId(prefix = 'msg') {
@@ -89,11 +124,17 @@ document.addEventListener('DOMContentLoaded', function () {
         const data = await response.json();
         allSessions = data.sessions || [];
         renderSessionList();
+      } else {
+        showToast('Gagal memuat daftar chat. Coba lagi nanti.', 'error');
       }
     } catch (error) {
       console.error('Error loading chat sessions:', error);
+      showToast('Gagal memuat daftar chat. Periksa koneksi Anda.', 'error');
     }
   }
+
+  // Debounced version to avoid frequent refreshes
+  const debouncedLoadAllSessions = debounce(loadAllSessions, 450);
   
   // Render session list in sidebar
   function renderSessionList() {
@@ -190,8 +231,8 @@ document.addEventListener('DOMContentLoaded', function () {
         chatBox.innerHTML = '';
         chatMessages = [];
         
-        // Refresh session list
-        loadAllSessions();
+  // Refresh session list (debounced)
+  debouncedLoadAllSessions();
         
         // Add welcome message
         setTimeout(() => {
@@ -199,6 +240,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }, 300);
       } catch (error) {
         console.error('Error clearing chat history:', error);
+  showToast('Gagal menghapus riwayat chat.', 'error');
       }
     }
   });
@@ -213,8 +255,8 @@ document.addEventListener('DOMContentLoaded', function () {
     chatBox.innerHTML = '';
     chatMessages = [];
     
-    // Refresh session list
-    loadAllSessions();
+  // Refresh session list (debounced)
+  debouncedLoadAllSessions();
     
     // Add welcome message
     setTimeout(() => {
@@ -291,10 +333,13 @@ document.addEventListener('DOMContentLoaded', function () {
         // Session not found, might be a new one
         chatBox.innerHTML = '';
         chatMessages = [];
+      } else {
+        showToast('Gagal memuat riwayat chat.', 'error');
       }
     } catch (error) {
       console.error('Error loading chat history:', error);
       chatBox.innerHTML = '';
+      showToast('Gagal memuat riwayat chat. Periksa koneksi Anda.', 'error');
     }
     
     // If no messages, add welcome message
@@ -604,7 +649,8 @@ document.addEventListener('DOMContentLoaded', function () {
           thinkingElement.appendChild(textElement);
           thinkingElement.classList.remove('typing');
         }
-        console.error(`Server error: ${response.status} ${response.statusText}`);
+  console.error(`Server error: ${response.status} ${response.statusText}`);
+  showToast(`Permintaan gagal (${response.status}). Coba lagi.`, 'error');
         return;
       }
 
@@ -644,6 +690,7 @@ document.addEventListener('DOMContentLoaded', function () {
         thinkingElement.innerHTML = '<div class="message-text">Maaf, terjadi kesalahan dalam komunikasi dengan server.</div>';
         thinkingElement.classList.remove('typing');
       }
+  showToast('Gagal menghubungi server. Periksa koneksi Anda.', 'error');
     } finally {
       if (submitBtn) submitBtn.disabled = false;
       userInput.focus();
