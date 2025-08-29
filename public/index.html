@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Gemini AI Chatbot</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <div class="app-wrapper">
+    <!-- Sidebar with chat history -->
+    <aside class="history-sidebar">
+      <div class="sidebar-header">
+        <h2>Chats</h2>
+        <button id="toggle-sidebar" class="icon-btn" title="Toggle Sidebar">
+          <i class="fas fa-chevron-left"></i>
+        </button>
+      </div>
+      <div class="history-list" id="history-list">
+        <!-- Chat history items will be populated here -->
+      </div>
+      <div class="sidebar-footer">
+        <button id="new-chat" class="primary-btn" title="Start New Chat">
+          <i class="fas fa-plus"></i> New Chat
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main chat container -->
+    <div class="container">
+      <h1><i class="fas fa-robot"></i> Gemini AI Chatbot</h1>
+      
+      <div class="chat-controls">
+        <button id="toggle-sidebar-mobile" class="control-btn" title="Show History">
+          <i class="fas fa-history"></i> History
+        </button>
+        <button id="clear-history" class="control-btn" title="Clear Chat History">
+          <i class="fas fa-trash"></i> Clear Chat
+        </button>
+      </div>
+      
+      <div id="chat-box" class="chat-box"></div>
+      <div class="attachment-preview" id="attachment-preview"></div>
+      <form id="chat-form">
+        <div class="input-container">
+          <input type="text" id="user-input" placeholder="Ketik pesan Anda di sini..." autocomplete="off" required />
+          <div class="attachment-controls">
+            <label for="image-upload" class="attachment-btn" title="Upload Gambar">
+              <i class="fas fa-image"></i>
+              <input type="file" id="image-upload" accept="image/*" hidden/>
+            </label>
+            <label for="audio-upload" class="attachment-btn" title="Upload Audio">
+              <i class="fas fa-microphone"></i>
+              <input type="file" id="audio-upload" accept="audio/*" hidden/>
+            </label>
+            <span id="clear-attachment" class="attachment-btn hidden" title="Hapus Attachment">
+              <i class="fas fa-times"></i>
+            </span>
+          </div>
+        </div>
+        <button type="submit"><i class="fas fa-paper-plane"></i></button>
+      </form>
+      <div class="credits">Di Buat Dengan ❤️ oleh RezaR2P </div>
+    </div>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
