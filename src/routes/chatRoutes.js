@@ -7,7 +7,8 @@ import multer from 'multer';
 import { processChat, processImageChat, processDocument, processAudio, generateText } from '../controllers/chatController.js';
 
 const router = express.Router();
-const upload = multer(); // In-memory storage
+// In-memory storage with sane file size limits (10MB)
+const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } });
 
 // Text chat endpoint
 router.post('/chat', processChat);

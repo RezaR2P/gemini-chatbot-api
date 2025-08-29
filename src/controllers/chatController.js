@@ -10,14 +10,21 @@ import { extractText } from '../utils/geminiHelper.js';
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const GEMINI_MODEL = "gemini-2.5-flash";
 
+// Ensure API key is configured
+function ensureApiKey(res) {
+  if (!process.env.GEMINI_API_KEY) {
+    res.status(500).json({ error: 'Server misconfiguration: missing GEMINI_API_KEY' });
+    return false;
+  }
+  return true;
+}
+
 /**
  * Process text chat messages
  */
 async function processChat(req, res) {
   try {
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({ error: 'Server misconfiguration: missing GEMINI_API_KEY' });
-    }
+  if (!ensureApiKey(res)) return;
     
     const { messages, sessionId } = req.body || {};
     
@@ -37,7 +44,7 @@ async function processChat(req, res) {
       contents: [{ text: lastUser.content }]
     });
 
-    const result = extractText(response)?.trim();
+  const result = extractText(response)?.trim() || '';
     
     // Save to chat history if sessionId is provided
     if (sessionId) {
@@ -61,7 +68,7 @@ async function processChat(req, res) {
       });
     }
     
-    return res.json({ result: result || '', sessionId });
+  return res.json({ result, sessionId });
     
   } catch (error) {
     console.error('Error in processChat:', error);
@@ -74,6 +81,7 @@ async function processChat(req, res) {
  */
 async function processImageChat(req, res) {
   try {
+    if (!ensureApiKey(res)) return;
     const { prompt, sessionId } = req.body;
     
     if (!req.file) {
@@ -83,7 +91,8 @@ async function processImageChat(req, res) {
       return res.status(400).json({ error: 'Invalid file type. Please upload an image.' });
     }
     
-    const imageBase64 = req.file.buffer.toString('base64');
+    const { buffer, mimetype } = req.file;
+    const imageBase64 = buffer.toString('base64');
     const response = await ai.models.generateContent({
       model: GEMINI_MODEL,
       contents: [
@@ -91,13 +100,13 @@ async function processImageChat(req, res) {
           role: 'user',
           parts: [
             { text: prompt || 'Describe this image in detail' },
-            { inlineData: { mimeType: req.file.mimetype, data: imageBase64 } }
+      { inlineData: { mimeType: mimetype, data: imageBase64 } }
           ]
         }
       ]
     });
     
-    const result = extractText(response);
+    const result = extractText(response)?.trim() || '';
     
     // Save to chat history if sessionId is provided
     if (sessionId) {
@@ -109,7 +118,7 @@ async function processImageChat(req, res) {
       });
       
       // Save bot response
-      const session = chatHistoryService.addMessage(sessionId, {
+  const session = chatHistoryService.addMessage(sessionId, {
         role: 'bot',
         content: result
       });
@@ -122,7 +131,7 @@ async function processImageChat(req, res) {
       });
     }
     
-    res.json({ result, sessionId });
+  res.json({ result, sessionId });
     
   } catch (error) {
     console.error("Error processing image:", error);
@@ -135,13 +144,15 @@ async function processImageChat(req, res) {
  */
 async function processDocument(req, res) {
   try {
-    const { prompt } = req.body;
+    if (!ensureApiKey(res)) return;
+    const { prompt, sessionId } = req.body;
     
     if (!req.file) {
       return res.status(400).json({ error: 'Document file is required' });
     }
     
-    const docBase64 = req.file.buffer.toString('base64');
+    const { buffer, mimetype } = req.file;
+    const docBase64 = buffer.toString('base64');
     const response = await ai.models.generateContent({
       model: GEMINI_MODEL,
       contents: [
@@ -149,13 +160,26 @@ async function processDocument(req, res) {
           role: 'user',
           parts: [
             { text: prompt || 'Summarize this document' },
-            { inlineData: { mimeType: req.file.mimetype, data: docBase64 } }
+            { inlineData: { mimeType: mimetype, data: docBase64 } }
           ]
         }
       ]
     });
-    
-    res.json({ result: extractText(response) });
+    const result = extractText(response)?.trim() || '';
+
+    if (sessionId) {
+      // Save user message (document reference)
+      chatHistoryService.addMessage(sessionId, {
+        role: 'user',
+        content: prompt || 'Document uploaded'
+      });
+      const session = chatHistoryService.addMessage(sessionId, {
+        role: 'bot',
+        content: result
+      });
+      return res.json({ result, sessionId, sessionTitle: session.title });
+    }
+    res.json({ result });
     
   } catch (error) {
     console.error("Error processing document:", error);
@@ -168,6 +192,7 @@ async function processDocument(req, res) {
  */
 async function processAudio(req, res) {
   try {
+    if (!ensureApiKey(res)) return;
     const { prompt, sessionId } = req.body;
     
     if (!req.file) {
@@ -177,7 +202,8 @@ async function processAudio(req, res) {
       return res.status(400).json({ error: 'Invalid file type. Please upload an audio file.' });
     }
     
-    const audioBase64 = req.file.buffer.toString('base64');
+    const { buffer, mimetype } = req.file;
+    const audioBase64 = buffer.toString('base64');
     const response = await ai.models.generateContent({
       model: GEMINI_MODEL,
       contents: [
@@ -185,13 +211,13 @@ async function processAudio(req, res) {
           role: 'user',
           parts: [
             { text: prompt || 'Transcribe this audio' },
-            { inlineData: { mimeType: req.file.mimetype, data: audioBase64 } }
+      { inlineData: { mimeType: mimetype, data: audioBase64 } }
           ]
         }
       ]
     });
     
-    const result = extractText(response);
+    const result = extractText(response)?.trim() || '';
     
     // Save to chat history if sessionId is provided
     if (sessionId) {
@@ -203,7 +229,7 @@ async function processAudio(req, res) {
       });
       
       // Save bot response
-      const session = chatHistoryService.addMessage(sessionId, {
+  const session = chatHistoryService.addMessage(sessionId, {
         role: 'bot',
         content: result
       });
@@ -216,7 +242,7 @@ async function processAudio(req, res) {
       });
     }
     
-    res.json({ result, sessionId });
+  res.json({ result, sessionId });
     
   } catch (error) {
     console.error("Error processing audio:", error);
@@ -229,6 +255,7 @@ async function processAudio(req, res) {
  */
 async function generateText(req, res) {
   try {
+  if (!ensureApiKey(res)) return;
     // Support both POST (body) and GET (query) prompts
     const prompt = (req.method === 'GET')
       ? (typeof req.query.prompt === 'string' ? req.query.prompt : '')
@@ -245,8 +272,8 @@ async function generateText(req, res) {
       ]
     });
 
-    const text = extractText(response)?.trim();
-    res.json({ text: text || '' });
+  const text = extractText(response)?.trim() || '';
+  res.json({ text });
     
   } catch (error) {
     console.error("Error generating text:", error);

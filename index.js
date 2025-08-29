@@ -5,6 +5,8 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // Import routes
 import chatRoutes from './src/routes/chatRoutes.js';
@@ -17,12 +19,17 @@ import notFoundHandler from './src/middlewares/notFoundHandler.js';
 // Initialize Express app
 const app = express();
 
+// Resolve dirname for ESM and static path reliability
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // Apply global middlewares
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
-// Serve static frontend files
-app.use(express.static('public'));
+// Serve static frontend files (resolve absolute path for reliability)
+app.use(express.static(path.resolve(__dirname, 'public')));
 
 // Health check endpoint
 app.get('/health', (req, res) => {

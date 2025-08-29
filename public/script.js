@@ -63,6 +63,23 @@ document.addEventListener('DOMContentLoaded', function () {
   
   toggleSidebarBtn.addEventListener('click', toggleSidebar);
   toggleSidebarMobileBtn.addEventListener('click', toggleSidebar);
+
+  // Simple markdown formatter for bot messages (with basic XSS safety)
+  function formatBotMarkdown(text) {
+    if (!text) return '';
+    const safe = String(text)
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    return safe
+      // Handle multi-line code blocks first
+      .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+      // Bold, italic, inline code
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      // Line breaks
+      .replace(/\n/g, '<br>');
+  }
   
   // Load all chat sessions
   async function loadAllSessions() {
@@ -307,42 +324,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // Save message to history
-  async function saveMessageToHistory(role, content, attachment = null) {
-    try {
-      // Normalize role to ensure consistency
-      const normalizedRole = role === 'user' ? 'user' : 'bot';
-      
-      // Build message object
-      const message = { 
-        role: normalizedRole, 
-        content,
-        hasImage: attachment?.type === 'image',
-        hasAudio: attachment?.type === 'audio'
-      };
-      
-      // Add to local array for immediate display
-      chatMessages.push(message);
-      
-      // Save to server
-      const response = await fetch(`/api/chat-history/${currentSessionId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message })
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        
-        // If this is the first message, we might have a new title
-        if (data.session && data.session.title) {
-          // Refresh the session list
-          loadAllSessions();
-        }
-      }
-    } catch (error) {
-      console.error('Error saving message:', error);
-    }
-  }
+  // Removed unused saveMessageToHistory; backend persists history.
 
   // Initial setup
   function initializeApp() {
@@ -434,8 +416,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Helper to add a message to the chat box with markdown and attachments
   function addMessage(role, content, messageId = null, attachment = null) {
-    // Normalize the role to ensure it's always 'user' or 'bot'
-    const normalizedRole = role === 'user' ? 'user' : 'bot';
+  // Normalize the role to ensure it's always 'user' or 'bot'
+  const normalizedRole = role === 'user' ? 'user' : 'bot';
     
     // Create message container for proper alignment
     const containerDiv = document.createElement('div');
@@ -452,39 +434,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     msgDiv.id = messageId;
     
-    let messageContent = '';
-    
-    // Enhanced markdown support for bot messages (bold, italic, code)
-    if (role === 'bot') {
-      // First sanitize the content to prevent XSS
-      let safeContent = content
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-        
-      // Then apply markdown formatting
-      messageContent = safeContent
-        // Replace markdown with HTML
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/`([^`]+)`/g, '<code>$1</code>')
-        // Handle multi-line code blocks with triple backticks
-        .replace(/```([^`]*?)```/g, '<pre><code>$1</code></pre>')
-        // Handle line breaks correctly
-        .replace(/\n/g, '<br>');
-    } else {
-      // For user messages, we use plain text and sanitize
-      messageContent = content.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
-    
+    // Enhanced markdown support only for bot messages
     // Create message content element
     const textElement = document.createElement('div');
     textElement.className = 'message-text';
-    
-    if (role === 'bot') {
-      // For bot messages, we've already sanitized and can use innerHTML for markdown
-      textElement.innerHTML = messageContent;
+    if (normalizedRole === 'bot') {
+      textElement.innerHTML = formatBotMarkdown(content);
     } else {
-      // For user messages, we use textContent for maximum security
+      // For user messages, use textContent for maximum safety
       textElement.textContent = content;
     }
     
@@ -529,9 +486,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // Add container to chat box
     chatBox.appendChild(containerDiv);
     
-    // Use our improved scroll to bottom function
+  // Use our improved scroll to bottom function
     scrollToBottom();
-    
+
   return msgDiv;
   }
 
@@ -659,16 +616,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (data && (typeof data.result === 'string' || typeof data.text === 'string')) {
           const result = data.result || data.text || '';
           
-          // First sanitize to prevent XSS
-          const safeResult = result.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          
-          // Then apply markdown formatting
-          const formattedResult = safeResult
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            .replace(/`([^`]+)`/g, '<code>$1</code>')
-            .replace(/```([^`]*?)```/g, '<pre><code>$1</code></pre>')
-            .replace(/\n/g, '<br>');
+          // Format and sanitize bot response consistently
+          const formattedResult = formatBotMarkdown(result);
           
           // Clear the element and add formatted message
           thinkingElement.innerHTML = '';
