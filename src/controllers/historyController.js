@@ -30,7 +30,27 @@ function getSession(req, res) {
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
     }
-    res.json(session);
+    // Create a deduplicated view (do not mutate stored history)
+    const deduped = [];
+    for (const m of session.messages) {
+      const prev = deduped[deduped.length - 1];
+      if (
+        prev &&
+        prev.role === m.role &&
+        (prev.content || '') === (m.content || '') &&
+        !!prev.hasImage === !!m.hasImage &&
+        !!prev.hasAudio === !!m.hasAudio
+      ) {
+        continue;
+      }
+      deduped.push(m);
+    }
+    res.json({
+      title: session.title,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+      messages: deduped
+    });
   } catch (error) {
     console.error('Error getting session history:', error);
     res.status(500).json({ error: 'Failed to retrieve session history' });

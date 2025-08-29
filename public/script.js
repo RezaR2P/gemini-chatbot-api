@@ -228,7 +228,22 @@ document.addEventListener('DOMContentLoaded', function () {
       if (response.ok) {
         const data = await response.json();
         if (data.messages && Array.isArray(data.messages)) {
-          chatMessages = data.messages;
+          // Remove immediate consecutive duplicates (often caused by double-save)
+          const deduped = [];
+          for (const m of data.messages) {
+            const prev = deduped[deduped.length - 1];
+            if (
+              prev &&
+              prev.role === m.role &&
+              (prev.content || '') === (m.content || '') &&
+              !!prev.hasImage === !!m.hasImage &&
+              !!prev.hasAudio === !!m.hasAudio
+            ) {
+              continue; // skip duplicate
+            }
+            deduped.push(m);
+          }
+          chatMessages = deduped;
           
           // Update document title with chat title
           document.title = data.title ? `${data.title} - Gemini AI Chatbot` : 'Gemini AI Chatbot';
@@ -236,7 +251,7 @@ document.addEventListener('DOMContentLoaded', function () {
           // Display server messages
           chatBox.innerHTML = '';
           // Process messages in the original order they were created
-          data.messages.forEach(msg => {
+          deduped.forEach(msg => {
             // Check for attachments
             const attachment = msg.hasImage || msg.hasAudio ? { 
               type: msg.hasImage ? 'image' : 'audio',
@@ -550,12 +565,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Add user message with sanitized content
     addMessage('user', sanitizedMessage || (displayAttachment ? displayAttachment.file.name : ''), null, displayAttachment);
     
-    // Save to history with attachment info - use sanitized message
-    await saveMessageToHistory(
-      'user', 
-      sanitizedMessage || (displayAttachment ? displayAttachment.file.name : ''), 
-      displayAttachment ? { type: displayAttachment.type } : null
-    );
+  // History will be persisted by backend; avoid double-save here
     
     // Clear input and disable button to prevent multiple submissions
     userInput.value = '';
@@ -641,7 +651,7 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
       }
 
-      const data = await response.json();
+  const data = await response.json();
       
       // Remove typing indicator and replace with response
       const thinkingElement = document.getElementById(thinkingId);
@@ -668,8 +678,11 @@ document.addEventListener('DOMContentLoaded', function () {
           thinkingElement.appendChild(textElement);
           thinkingElement.classList.remove('typing');
           
-          // Save bot response to history
-          await saveMessageToHistory('bot', result);
+          // Backend already saved bot response; avoid double-save
+          if (data.sessionTitle) {
+            // Update session list/title if needed
+            loadAllSessions();
+          }
         } else {
           thinkingElement.innerHTML = '<div class="message-text">Maaf, tidak ada respons yang diterima.</div>';
           thinkingElement.classList.remove('typing');
