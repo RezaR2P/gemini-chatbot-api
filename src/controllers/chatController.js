@@ -151,6 +151,9 @@ async function processImagesChat(req, res) {
     if (!files || !Array.isArray(files) || files.length === 0) {
       return res.status(400).json({ error: 'At least one image file is required' });
     }
+    if (files.length > 6) {
+      return res.status(400).json({ error: 'Maximum 6 images are allowed per request' });
+    }
     const invalid = files.find(f => !f.mimetype?.startsWith('image/'));
     if (invalid) {
       return res.status(400).json({ error: 'Invalid file type detected. Only images are allowed.' });

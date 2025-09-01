@@ -19,8 +19,8 @@ router.post('/generate-from-image', upload.single('image'), processImageChat);
 router.post('/generate_from_image', upload.single('image'), processImageChat);
 
 // Multiple images processing endpoint
-router.post('/generate-from-images', upload.array('images'), processImagesChat);
-router.post('/generate_from_images', upload.array('images'), processImagesChat);
+router.post('/generate-from-images', upload.array('images', 6), processImagesChat);
+router.post('/generate_from_images', upload.array('images', 6), processImagesChat);
 
 // Document processing endpoint
 router.post('/generate-from-document', upload.single('document'), processDocument);

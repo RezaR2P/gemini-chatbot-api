@@ -614,34 +614,136 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
+  // Build request each time from a snapshot (so it can be retried)
+  function buildRequestFromSnapshot(snapshot) {
+    let url = '/api/chat/chat';
+    let requestOptions = { method: 'POST' };
+
+    if (snapshot.kind === 'text') {
+      url = '/api/chat/chat';
+      requestOptions.headers = { 'Content-Type': 'application/json' };
+      requestOptions.body = JSON.stringify({
+        messages: [{ role: 'user', content: snapshot.prompt }],
+        sessionId: snapshot.sessionId
+      });
+    } else if (snapshot.kind === 'audio') {
+      url = '/api/chat/generate-from-audio';
+      const formData = new FormData();
+      formData.append('audio', snapshot.audioFile);
+      formData.append('prompt', snapshot.prompt || 'Transcribe this audio');
+      formData.append('sessionId', snapshot.sessionId);
+      requestOptions.body = formData;
+    } else if (snapshot.kind === 'images') {
+      url = '/api/chat/generate-from-images';
+      const formData = new FormData();
+      snapshot.imageFiles.forEach(f => formData.append('images', f));
+      formData.append('prompt', snapshot.prompt || 'Describe these images');
+      formData.append('sessionId', snapshot.sessionId);
+      requestOptions.body = formData;
+    } else if (snapshot.kind === 'image') {
+      url = '/api/chat/generate-from-image';
+      const formData = new FormData();
+      formData.append('image', snapshot.imageFiles[0]);
+      formData.append('prompt', snapshot.prompt || 'Describe this image in detail');
+      formData.append('sessionId', snapshot.sessionId);
+      requestOptions.body = formData;
+    }
+    return { url, requestOptions };
+  }
+
+  // Show retry UI on a message bubble
+  function showRetryUI(targetEl, snapshot, messageText = 'Maaf, terjadi kesalahan saat menghubungi server.') {
+    targetEl.classList.remove('typing');
+    targetEl.innerHTML = '';
+    const textElement = document.createElement('div');
+    textElement.className = 'message-text';
+    textElement.textContent = messageText;
+    targetEl.appendChild(textElement);
+
+    const actions = document.createElement('div');
+    actions.className = 'retry-wrap';
+    const retryBtn = document.createElement('button');
+    retryBtn.type = 'button';
+    retryBtn.className = 'retry-btn';
+    retryBtn.innerHTML = '<i class="fas fa-redo"></i> Kirim ulang';
+    retryBtn.addEventListener('click', async () => {
+      // show typing again
+      targetEl.innerHTML = '';
+      const typing = document.createElement('div');
+      typing.className = 'typing-indicator';
+      typing.appendChild(document.createElement('span'));
+      typing.appendChild(document.createElement('span'));
+      typing.appendChild(document.createElement('span'));
+      targetEl.appendChild(typing);
+      targetEl.classList.add('typing');
+
+      if (submitBtn) submitBtn.disabled = true;
+      await performSend(snapshot, targetEl);
+      if (submitBtn) submitBtn.disabled = false;
+    });
+    actions.appendChild(retryBtn);
+    targetEl.appendChild(actions);
+  }
+
+  // Perform the send using a snapshot and update the same bot bubble
+  async function performSend(snapshot, thinkingElement) {
+    try {
+      const { url, requestOptions } = buildRequestFromSnapshot(snapshot);
+      const response = await fetch(url, requestOptions);
+
+      if (!response.ok) {
+        const msg = response.status === 429
+          ? 'Terlalu banyak permintaan. Mohon tunggu sebentar lalu kirim ulang.'
+          : 'Maaf, terjadi kesalahan saat menghubungi server.';
+        showRetryUI(thinkingElement, snapshot, msg);
+        console.error(`Server error: ${response.status} ${response.statusText}`);
+        showToast(`Permintaan gagal (${response.status}).`, 'error');
+        return;
+      }
+
+      const data = await response.json();
+      if (data && (typeof data.result === 'string' || typeof data.text === 'string')) {
+        const result = data.result || data.text || '';
+        thinkingElement.innerHTML = '';
+        const textElement = document.createElement('div');
+        textElement.className = 'message-text';
+        textElement.innerHTML = formatBotMarkdown(result);
+        thinkingElement.appendChild(textElement);
+        thinkingElement.classList.remove('typing');
+        if (data.sessionTitle) loadAllSessions();
+      } else {
+        showRetryUI(thinkingElement, snapshot, 'Maaf, tidak ada respons yang diterima.');
+      }
+    } catch (err) {
+      console.error('Network error:', err);
+      showRetryUI(thinkingElement, snapshot, 'Gagal menghubungi server. Periksa koneksi lalu kirim ulang.');
+      showToast('Gagal menghubungi server.', 'error');
+    }
+  }
+
   chatForm.addEventListener('submit', async function (e) {
     e.preventDefault();
     const message = userInput.value.trim();
     
-  // Check if we have a message or attachment
-  const hasAnyAttachment = attachments.images.length > 0 || !!attachments.audio;
-  if (!message && !hasAnyAttachment) return;
+    // Check if we have a message or attachment
+    const hasAnyAttachment = attachments.images.length > 0 || !!attachments.audio;
+    if (!message && !hasAnyAttachment) return;
     
     // Basic input validation and sanitization
     const sanitizedMessage = message 
       ? message.replace(/</g, '&lt;').replace(/>/g, '&gt;')
       : '';
     
-  // Build display attachments array for UI rendering
-  const displayAttachments = [];
-  attachments.images.forEach(img => displayAttachments.push({ type: 'image', data: img.data }));
-  if (attachments.audio) displayAttachments.push({ type: 'audio', data: attachments.audio.data });
+    // Build display attachments array for UI rendering
+    const displayAttachments = [];
+    attachments.images.forEach(img => displayAttachments.push({ type: 'image', data: img.data }));
+    if (attachments.audio) displayAttachments.push({ type: 'audio', data: attachments.audio.data });
 
-  // Add user message with attachments preview
-  addMessage('user', sanitizedMessage || (displayAttachments.length ? 'Mengirim lampiran' : ''), null, displayAttachments);
-    
-  // History will be persisted by backend; avoid double-save here
-    
-    // Clear input and disable button to prevent multiple submissions
-    userInput.value = '';
-    
-    // Show typing indicator
-  const thinkingId = uniqueId('thinking');
+    // Add user message with attachments preview
+    addMessage('user', sanitizedMessage || (displayAttachments.length ? 'Mengirim lampiran' : ''), null, displayAttachments);
+
+    // Create bot thinking bubble
+    const thinkingId = uniqueId('thinking');
     const thinkingDiv = document.createElement('div');
     thinkingDiv.className = 'typing-indicator';
     thinkingDiv.appendChild(document.createElement('span'));
@@ -650,116 +752,45 @@ document.addEventListener('DOMContentLoaded', function () {
     const thinkingMsg = addMessage('bot', '', thinkingId);
     thinkingMsg.appendChild(thinkingDiv);
     thinkingMsg.classList.add('typing');
-    
-    // prevent double submit while waiting
-    if (submitBtn) submitBtn.disabled = true;
 
-    // Prepare for sending
-    let url = '/api/chat/chat';
-    let payload;
-    let requestOptions = {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    };
-    
-    // Handle different types of content
+    // Build a retryable snapshot BEFORE clearing attachments
+    let snapshot;
     if (hasAnyAttachment) {
       if (attachments.audio) {
-        url = '/api/chat/generate-from-audio';
-        const formData = new FormData();
-        formData.append('audio', attachments.audio.file);
-        formData.append('prompt', message || 'Transcribe this audio');
-        formData.append('sessionId', currentSessionId);
-        requestOptions = { method: 'POST', body: formData };
+        snapshot = {
+          kind: 'audio',
+          prompt: message || 'Transcribe this audio',
+          sessionId: currentSessionId,
+          audioFile: attachments.audio.file
+        };
       } else if (attachments.images.length > 1) {
-        url = '/api/chat/generate-from-images';
-        const formData = new FormData();
-        attachments.images.forEach(img => formData.append('images', img.file));
-        formData.append('prompt', message || 'Describe these images');
-        formData.append('sessionId', currentSessionId);
-        requestOptions = { method: 'POST', body: formData };
-      } else if (attachments.images.length === 1) {
-        url = '/api/chat/generate-from-image';
-        const formData = new FormData();
-        formData.append('image', attachments.images[0].file);
-        formData.append('prompt', message || 'Describe this image in detail');
-        formData.append('sessionId', currentSessionId);
-        requestOptions = { method: 'POST', body: formData };
+        snapshot = {
+          kind: 'images',
+          prompt: message || 'Describe these images',
+          sessionId: currentSessionId,
+          imageFiles: attachments.images.map(i => i.file)
+        };
+      } else {
+        snapshot = {
+          kind: 'image',
+          prompt: message || 'Describe this image in detail',
+          sessionId: currentSessionId,
+          imageFiles: [attachments.images[0].file]
+        };
       }
-      // Clear attachments now that we've processed them
+      // clear current UI attachments after snapshot
       clearAllAttachments();
     } else {
-      // Regular text message
-      payload = {
-        messages: [{ role: 'user', content: message }],
-        sessionId: currentSessionId
-      };
-      requestOptions.body = JSON.stringify(payload);
+      snapshot = { kind: 'text', prompt: message, sessionId: currentSessionId };
     }
 
-    try {
-      const response = await fetch(url, requestOptions);
+    // Clear input and prevent double submit while waiting
+    userInput.value = '';
+    if (submitBtn) submitBtn.disabled = true;
 
-      if (!response.ok) {
-        const thinkingElement = document.getElementById(thinkingId);
-        if (thinkingElement) {
-          const errorMsg = response.status === 429 
-            ? 'Terlalu banyak permintaan. Mohon tunggu beberapa saat dan coba lagi.' 
-            : 'Maaf, terjadi kesalahan saat menghubungi server.';
-          
-          // Clear the element and add error message
-          thinkingElement.innerHTML = '';
-          const textElement = document.createElement('div');
-          textElement.className = 'message-text';
-          textElement.textContent = errorMsg;
-          thinkingElement.appendChild(textElement);
-          thinkingElement.classList.remove('typing');
-        }
-  console.error(`Server error: ${response.status} ${response.statusText}`);
-  showToast(`Permintaan gagal (${response.status}). Coba lagi.`, 'error');
-        return;
-      }
+    await performSend(snapshot, document.getElementById(thinkingId));
 
-  const data = await response.json();
-      
-      // Remove typing indicator and replace with response
-      const thinkingElement = document.getElementById(thinkingId);
-      if (thinkingElement) {
-        if (data && (typeof data.result === 'string' || typeof data.text === 'string')) {
-          const result = data.result || data.text || '';
-          
-          // Format and sanitize bot response consistently
-          const formattedResult = formatBotMarkdown(result);
-          
-          // Clear the element and add formatted message
-          thinkingElement.innerHTML = '';
-          const textElement = document.createElement('div');
-          textElement.className = 'message-text';
-          textElement.innerHTML = formattedResult;
-          thinkingElement.appendChild(textElement);
-          thinkingElement.classList.remove('typing');
-          
-          // Backend already saved bot response; avoid double-save
-          if (data.sessionTitle) {
-            // Update session list/title if needed
-            loadAllSessions();
-          }
-        } else {
-          thinkingElement.innerHTML = '<div class="message-text">Maaf, tidak ada respons yang diterima.</div>';
-          thinkingElement.classList.remove('typing');
-        }
-      }
-    } catch (err) {
-      console.error('Error communicating with server:', err);
-      const thinkingElement = document.getElementById(thinkingId);
-      if (thinkingElement) {
-        thinkingElement.innerHTML = '<div class="message-text">Maaf, terjadi kesalahan dalam komunikasi dengan server.</div>';
-        thinkingElement.classList.remove('typing');
-      }
-  showToast('Gagal menghubungi server. Periksa koneksi Anda.', 'error');
-    } finally {
-      if (submitBtn) submitBtn.disabled = false;
-      userInput.focus();
-    }
+    if (submitBtn) submitBtn.disabled = false;
+    userInput.focus();
   });
 });
