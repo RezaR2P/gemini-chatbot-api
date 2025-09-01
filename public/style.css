@@ -428,8 +428,6 @@ input[type="text"] {
 
 .attachment-preview {
   margin: 10px 0;
-  max-height: 200px;
-  overflow: hidden;
   display: none;
   border-radius: 12px;
   position: relative;
@@ -443,6 +441,7 @@ input[type="text"] {
   border: 1px dashed rgba(65, 88, 208, 0.3);
 }
 
+/* Legacy single preview image (kept for compatibility) */
 .attachment-preview img {
   max-width: 100%;
   max-height: 180px;
@@ -463,6 +462,85 @@ input[type="text"] {
   color: #4158D0;
   margin-bottom: 5px;
   font-weight: 500;
+}
+
+/* Multi-attachment chips */
+.attachment-list {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.attachment-item {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(0,0,0,0.15);
+  border: 1px solid rgba(255,255,255,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.attachment-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.attachment-actions {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 2;
+}
+
+.attachment-action-btn {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(17,24,39,0.7);
+  color: #e5e7eb;
+  border: 1px solid rgba(255,255,255,0.15);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.attachment-action-btn:hover {
+  transform: scale(1.05);
+}
+
+/* Specific placements and sizes */
+.attachment-action-btn i { font-size: 10px; line-height: 1; }
+
+/* Audio chip: keep actions at top-right to avoid overlapping controls */
+.attachment-item.audio .attachment-actions {
+  top: 6px;
+  right: 6px;
+  transform: none;
+  flex-direction: row;
+}
+
+/* Audio chip */
+.attachment-item.audio {
+  width: auto;
+  min-width: 240px;
+  max-width: 100%;
+  padding: 6px;
+  background: rgba(0,0,0,0.1);
+}
+.attachment-item.audio audio {
+  width: 100%;
 }
 
 /* Media embedded in messages */

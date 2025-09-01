@@ -140,6 +140,55 @@ async function processImageChat(req, res) {
 }
 
 /**
+ * Process multiple images with a single prompt
+ */
+async function processImagesChat(req, res) {
+  try {
+    if (!ensureApiKey(res)) return;
+    const { prompt, sessionId } = req.body;
+
+    const files = req.files;
+    if (!files || !Array.isArray(files) || files.length === 0) {
+      return res.status(400).json({ error: 'At least one image file is required' });
+    }
+    const invalid = files.find(f => !f.mimetype?.startsWith('image/'));
+    if (invalid) {
+      return res.status(400).json({ error: 'Invalid file type detected. Only images are allowed.' });
+    }
+
+    const parts = [ { text: prompt || 'Describe these images' } ];
+    for (const f of files) {
+      const base64 = f.buffer.toString('base64');
+      parts.push({ inlineData: { mimeType: f.mimetype, data: base64 } });
+    }
+
+    const response = await ai.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: [ { role: 'user', parts } ]
+    });
+
+    const result = extractText(response)?.trim() || '';
+
+    if (sessionId) {
+      chatHistoryService.addMessage(sessionId, {
+        role: 'user',
+        content: prompt || `Uploaded ${files.length} image(s)`,
+        hasImage: true
+      });
+      const session = chatHistoryService.addMessage(sessionId, {
+        role: 'bot',
+        content: result
+      });
+      return res.json({ result, sessionId, sessionTitle: session.title });
+    }
+    res.json({ result, sessionId });
+  } catch (error) {
+    console.error('Error processing multiple images:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
  * Process document input for analysis
  */
 async function processDocument(req, res) {
@@ -284,6 +333,7 @@ async function generateText(req, res) {
 export {
   processChat,
   processImageChat,
+  processImagesChat,
   processDocument,
   processAudio,
   generateText

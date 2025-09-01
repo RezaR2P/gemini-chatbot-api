@@ -16,7 +16,8 @@ document.addEventListener('DOMContentLoaded', function () {
   const historyList = document.getElementById('history-list');
   
   // State
-  let currentAttachment = null;
+  // Attachments state: images: array of {file, data}, audio: single {file, data} or null
+  let attachments = { images: [], audio: null };
   let currentSessionId = localStorage.getItem('chatSessionId') || generateSessionId();
   let chatMessages = [];
   let allSessions = [];
@@ -387,76 +388,135 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Handle image upload
   imageUpload.addEventListener('change', function(e) {
-    if (this.files && this.files[0]) {
-      handleFileUpload(this.files[0], 'image');
+    if (this.files && this.files.length) {
+      const files = Array.from(this.files).slice(0, 6); // cap to 6 images
+      files.forEach(file => addAttachment(file, 'image'));
+      this.value = '';
     }
   });
 
   // Handle audio upload
   audioUpload.addEventListener('change', function(e) {
     if (this.files && this.files[0]) {
-      handleFileUpload(this.files[0], 'audio');
+      addAttachment(this.files[0], 'audio');
+      this.value = '';
     }
   });
 
   // Clear attachment
   clearAttachment.addEventListener('click', function() {
-    clearCurrentAttachment();
+    clearAllAttachments();
   });
 
-  // Handle file upload
-  function handleFileUpload(file, type) {
-    const fileReader = new FileReader();
-    
-    fileReader.onload = function(e) {
-      // Clear previous attachment
-      clearCurrentAttachment(false);
-      
-      // Set current attachment
-      currentAttachment = {
-        type: type,
-        file: file,
-        data: e.target.result
-      };
-      
-      // Show preview
-      attachmentPreview.innerHTML = '';
-      attachmentPreview.classList.add('active');
-      
-      const fileLabel = document.createElement('span');
-      fileLabel.className = 'attachment-label';
-      fileLabel.textContent = type === 'image' ? 'Preview Gambar:' : 'Preview Audio:';
-      attachmentPreview.appendChild(fileLabel);
-      
+  // Add attachment to state and render preview chips
+  function addAttachment(file, type) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
       if (type === 'image') {
-        const img = document.createElement('img');
-        img.src = e.target.result;
-        attachmentPreview.appendChild(img);
+        attachments.images.push({ file, data: e.target.result, type: 'image' });
       } else if (type === 'audio') {
-        const audio = document.createElement('audio');
-        audio.controls = true;
-        audio.src = e.target.result;
-        attachmentPreview.appendChild(audio);
+        // only one audio at a time; replace existing
+        attachments.audio = { file, data: e.target.result, type: 'audio' };
       }
-      
-      // Show clear button
-      clearAttachment.classList.remove('hidden');
+      renderAttachmentPreview();
     };
-    
-    fileReader.readAsDataURL(file);
+    reader.readAsDataURL(file);
   }
 
-  // Clear current attachment
-  function clearCurrentAttachment(resetInput = true) {
-    currentAttachment = null;
+  // Render preview chips for attachments
+  function renderAttachmentPreview() {
     attachmentPreview.innerHTML = '';
-    attachmentPreview.classList.remove('active');
-    clearAttachment.classList.add('hidden');
-    
-    if (resetInput) {
-      imageUpload.value = '';
-      audioUpload.value = '';
+    const hasAny = attachments.images.length > 0 || !!attachments.audio;
+    if (!hasAny) {
+      attachmentPreview.classList.remove('active');
+      clearAttachment.classList.add('hidden');
+      return;
     }
+    attachmentPreview.classList.add('active');
+    clearAttachment.classList.remove('hidden');
+    
+    const label = document.createElement('span');
+    label.className = 'attachment-label';
+    label.textContent = 'Attachments:';
+    attachmentPreview.appendChild(label);
+    
+    const list = document.createElement('div');
+    list.className = 'attachment-list';
+    attachmentPreview.appendChild(list);
+    
+    attachments.images.forEach((att, idx) => {
+      const item = document.createElement('div');
+      item.className = 'attachment-item';
+      const img = document.createElement('img');
+      img.src = att.data;
+      item.appendChild(img);
+      
+  const actions = document.createElement('div');
+  actions.className = 'attachment-actions';
+  const editBtn = document.createElement('button');
+  editBtn.className = 'attachment-action-btn edit';
+      editBtn.title = 'Ganti gambar';
+      editBtn.innerHTML = '<i class="fas fa-pen"></i>';
+      editBtn.addEventListener('click', () => replaceImageAt(idx));
+  const delBtn = document.createElement('button');
+  delBtn.className = 'attachment-action-btn delete';
+      delBtn.title = 'Hapus gambar';
+      delBtn.innerHTML = '<i class="fas fa-times"></i>';
+      delBtn.addEventListener('click', () => removeImageAt(idx));
+      actions.appendChild(editBtn);
+      actions.appendChild(delBtn);
+      item.appendChild(actions);
+      list.appendChild(item);
+    });
+    
+    if (attachments.audio) {
+      const aItem = document.createElement('div');
+      aItem.className = 'attachment-item audio';
+      const audio = document.createElement('audio');
+      audio.controls = true;
+      audio.src = attachments.audio.data;
+      aItem.appendChild(audio);
+      const actions = document.createElement('div');
+      actions.className = 'attachment-actions';
+      const delBtn = document.createElement('button');
+      delBtn.className = 'attachment-action-btn';
+      delBtn.title = 'Hapus audio';
+      delBtn.innerHTML = '<i class="fas fa-times"></i>';
+      delBtn.addEventListener('click', () => { attachments.audio = null; renderAttachmentPreview(); });
+      actions.appendChild(delBtn);
+      aItem.appendChild(actions);
+      list.appendChild(aItem);
+    }
+  }
+
+  function replaceImageAt(index) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = () => {
+      if (input.files && input.files[0]) {
+        const file = input.files[0];
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          attachments.images[index] = { file, data: e.target.result, type: 'image' };
+          renderAttachmentPreview();
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
+  }
+
+  function removeImageAt(index) {
+    attachments.images.splice(index, 1);
+    renderAttachmentPreview();
+  }
+
+  function clearAllAttachments() {
+    attachments = { images: [], audio: null };
+    imageUpload.value = '';
+    audioUpload.value = '';
+    renderAttachmentPreview();
   }
 
   // Helper to add a message to the chat box with markdown and attachments
@@ -492,36 +552,41 @@ document.addEventListener('DOMContentLoaded', function () {
     
     msgDiv.appendChild(textElement);
     
-    // Add attachment if provided
-    if (attachment) {
-      if (attachment.type === 'image') {
-        if (attachment.isReference) {
-          // This is a reference to an uploaded image
-          const imgPlaceholder = document.createElement('div');
-          imgPlaceholder.className = 'image-reference';
-          imgPlaceholder.innerHTML = '<i class="fas fa-image"></i> [Image attachment]';
-          msgDiv.appendChild(imgPlaceholder);
+    // Add attachment(s) if provided
+    function appendOne(att) {
+      if (att.type === 'image') {
+        if (att.isReference) {
+          const ref = document.createElement('div');
+          ref.className = 'image-reference';
+          ref.innerHTML = '<i class="fas fa-image"></i> [Image attachment]';
+          msgDiv.appendChild(ref);
         } else {
           const img = document.createElement('img');
-          img.src = attachment.data;
+          img.src = att.data;
           img.className = 'attached-image';
           img.alt = 'Attached image';
           msgDiv.appendChild(img);
         }
-      } else if (attachment.type === 'audio') {
-        if (attachment.isReference) {
-          // This is a reference to an uploaded audio
-          const audioPlaceholder = document.createElement('div');
-          audioPlaceholder.className = 'audio-reference';
-          audioPlaceholder.innerHTML = '<i class="fas fa-microphone"></i> [Audio attachment]';
-          msgDiv.appendChild(audioPlaceholder);
+      } else if (att.type === 'audio') {
+        if (att.isReference) {
+          const ref = document.createElement('div');
+          ref.className = 'audio-reference';
+          ref.innerHTML = '<i class="fas fa-microphone"></i> [Audio attachment]';
+          msgDiv.appendChild(ref);
         } else {
           const audio = document.createElement('audio');
           audio.controls = true;
-          audio.src = attachment.data;
+          audio.src = att.data;
           audio.className = 'attached-audio';
           msgDiv.appendChild(audio);
         }
+      }
+    }
+    if (attachment) {
+      if (Array.isArray(attachment)) {
+        attachment.forEach(appendOne);
+      } else {
+        appendOne(attachment);
       }
     }
     
@@ -553,19 +618,22 @@ document.addEventListener('DOMContentLoaded', function () {
     e.preventDefault();
     const message = userInput.value.trim();
     
-    // Check if we have a message or attachment
-    if (!message && !currentAttachment) return;
+  // Check if we have a message or attachment
+  const hasAnyAttachment = attachments.images.length > 0 || !!attachments.audio;
+  if (!message && !hasAnyAttachment) return;
     
     // Basic input validation and sanitization
     const sanitizedMessage = message 
       ? message.replace(/</g, '&lt;').replace(/>/g, '&gt;')
       : '';
     
-    // Get attachment to display in the UI (before it's cleared)
-    const displayAttachment = currentAttachment ? {...currentAttachment} : null;
-    
-    // Add user message with sanitized content
-    addMessage('user', sanitizedMessage || (displayAttachment ? displayAttachment.file.name : ''), null, displayAttachment);
+  // Build display attachments array for UI rendering
+  const displayAttachments = [];
+  attachments.images.forEach(img => displayAttachments.push({ type: 'image', data: img.data }));
+  if (attachments.audio) displayAttachments.push({ type: 'audio', data: attachments.audio.data });
+
+  // Add user message with attachments preview
+  addMessage('user', sanitizedMessage || (displayAttachments.length ? 'Mengirim lampiran' : ''), null, displayAttachments);
     
   // History will be persisted by backend; avoid double-save here
     
@@ -595,33 +663,31 @@ document.addEventListener('DOMContentLoaded', function () {
     };
     
     // Handle different types of content
-    if (currentAttachment) {
-      if (currentAttachment.type === 'image') {
-        url = '/api/chat/generate-from-image';
-        const formData = new FormData();
-        formData.append('image', currentAttachment.file);
-        formData.append('prompt', message || 'Describe this image in detail');
-        formData.append('sessionId', currentSessionId);
-        
-        requestOptions = {
-          method: 'POST',
-          body: formData
-        };
-      } else if (currentAttachment.type === 'audio') {
+    if (hasAnyAttachment) {
+      if (attachments.audio) {
         url = '/api/chat/generate-from-audio';
         const formData = new FormData();
-        formData.append('audio', currentAttachment.file);
+        formData.append('audio', attachments.audio.file);
         formData.append('prompt', message || 'Transcribe this audio');
         formData.append('sessionId', currentSessionId);
-        
-        requestOptions = {
-          method: 'POST',
-          body: formData
-        };
+        requestOptions = { method: 'POST', body: formData };
+      } else if (attachments.images.length > 1) {
+        url = '/api/chat/generate-from-images';
+        const formData = new FormData();
+        attachments.images.forEach(img => formData.append('images', img.file));
+        formData.append('prompt', message || 'Describe these images');
+        formData.append('sessionId', currentSessionId);
+        requestOptions = { method: 'POST', body: formData };
+      } else if (attachments.images.length === 1) {
+        url = '/api/chat/generate-from-image';
+        const formData = new FormData();
+        formData.append('image', attachments.images[0].file);
+        formData.append('prompt', message || 'Describe this image in detail');
+        formData.append('sessionId', currentSessionId);
+        requestOptions = { method: 'POST', body: formData };
       }
-      
-      // Clear attachment now that we've processed it
-      clearCurrentAttachment();
+      // Clear attachments now that we've processed them
+      clearAllAttachments();
     } else {
       // Regular text message
       payload = {

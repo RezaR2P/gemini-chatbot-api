@@ -4,7 +4,7 @@
 
 import express from 'express';
 import multer from 'multer';
-import { processChat, processImageChat, processDocument, processAudio, generateText } from '../controllers/chatController.js';
+import { processChat, processImageChat, processImagesChat, processDocument, processAudio, generateText } from '../controllers/chatController.js';
 
 const router = express.Router();
 // In-memory storage with sane file size limits (10MB)
@@ -17,6 +17,10 @@ router.post('/chat', processChat);
 router.post('/generate-from-image', upload.single('image'), processImageChat);
 // Alias with underscore
 router.post('/generate_from_image', upload.single('image'), processImageChat);
+
+// Multiple images processing endpoint
+router.post('/generate-from-images', upload.array('images'), processImagesChat);
+router.post('/generate_from_images', upload.array('images'), processImagesChat);
 
 // Document processing endpoint
 router.post('/generate-from-document', upload.single('document'), processDocument);
